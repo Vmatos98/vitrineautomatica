@@ -5,7 +5,9 @@ import {
   Search, 
   ExternalLink, 
   ShoppingBag, 
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -34,10 +36,17 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
     setIsLoaded(true);
   }, []);
+
+  // Reset pagination when using filters
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeCategory]);
 
   // Preparar a lista de categorias pra exibir (Adicionando "Todos" e mapeando os nomes)
   const categoriesList = useMemo(() => {
@@ -47,10 +56,23 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
 
   // Filtrar produtos com base na busca e categoria
   const filteredProducts = useMemo(() => {
+    // Helper function to remove accents and normalize string for better matching
+    const normalizeString = (str: string) => {
+      return str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    };
+
+    const normalizedSearch = normalizeString(searchTerm);
+
     return initialProducts.filter(p => {
+      const normalizedProduct = normalizeString(p.produto);
+      const normalizedDesc = normalizeString(p.descricao || '');
+
       const matchSearch = 
-        p.produto.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (p.descricao?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+        normalizedProduct.includes(normalizedSearch) || 
+        normalizedDesc.includes(normalizedSearch);
       
       const catObj = initialCategories.find(c => c.id === p.id_categoria);
       const catName = catObj ? catObj.nome : 'Sem Categoria';
@@ -60,6 +82,13 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
       return matchSearch && matchCategory;
     });
   }, [searchTerm, activeCategory, initialProducts, initialCategories]);
+
+  // Paginação
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
 
   // Helper para buscar o nome da categoria para a badge do produto
   const getCategoryName = (catId: string | null) => {
@@ -87,12 +116,12 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
       </div>
 
       {/* Filtros de Categoria */}
-      <div className="flex overflow-x-auto py-2 mb-10 gap-3 no-scrollbar justify-start md:justify-center px-2">
+      <div className="flex flex-wrap py-2 mb-10 gap-3 justify-start md:justify-center px-2">
         {categoriesList.map(category => (
           <button
             key={category}
             onClick={() => setActiveCategory(category)}
-            className={`whitespace-nowrap px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 border ${
+            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 border ${
               activeCategory === category
                 ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white border-transparent shadow-[0_4px_14px_0_rgb(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgb(99,102,241,0.23)] hover:-translate-y-0.5'
                 : 'bg-white/80 dark:bg-slate-800/80 backdrop-blur-md text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-slate-700'
@@ -105,9 +134,10 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
 
       {/* Grid de Produtos */}
       {filteredProducts.length > 0 ? (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredProducts.map((product, idx) => (
-              <Link 
+          {paginatedProducts.map((product, idx) => (
+              <Link
                 href={`/produto/${product.id}`}
                 key={product.id} 
                 className="group bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg rounded-[2rem] shadow-sm border border-slate-200/50 dark:border-slate-800/50 overflow-hidden hover:-translate-y-2 hover:shadow-2xl dark:hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-all duration-500 flex flex-col"
@@ -184,7 +214,13 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
                     >
                       <div className="absolute inset-0 bg-white/20 rounded-2xl translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300 ease-out" />
                       <ShoppingBag size={18} className="relative z-10" />
-                      <span className="relative z-10">Comprar Agora</span>
+                      <span className="relative z-10">
+                        {product.shop?.toLowerCase() === 'shopee'
+                          ? 'Confira na shopee'
+                          : product.shop?.toLowerCase().includes('mercado')
+                          ? 'Ver no Mercado Livre'
+                          : 'Comprar Agora'}
+                      </span>
                       <ExternalLink size={16} className="relative z-10 opacity-70 ml-1" />
                     </button>
                   </div>
@@ -192,6 +228,70 @@ export default function VitrineClient({ initialProducts, initialCategories }: Vi
               </Link>
           ))}
         </div>
+
+        {/* Controles de Paginação */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-12 mb-8">
+            <button
+              onClick={() => {
+                setCurrentPage(p => Math.max(1, p - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage === 1}
+              className="p-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+              aria-label="Página anterior"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            
+            <div className="flex items-center gap-1 mx-2">
+              {Array.from({ length: totalPages }).map((_, i) => {
+                const pageNum = i + 1;
+                if (
+                  pageNum === 1 || 
+                  pageNum === totalPages || 
+                  (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                ) {
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => {
+                        setCurrentPage(pageNum);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${
+                        currentPage === pageNum
+                          ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-[0_4px_14px_0_rgb(99,102,241,0.39)]'
+                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:shadow-md'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                } else if (
+                  pageNum === currentPage - 2 ||
+                  pageNum === currentPage + 2
+                ) {
+                  return <span key={pageNum} className="text-slate-400 dark:text-slate-500">...</span>;
+                }
+                return null;
+              })}
+            </div>
+
+            <button
+              onClick={() => {
+                setCurrentPage(p => Math.min(totalPages, p + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+              aria-label="Próxima página"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+        )}
+        </>
       ) : (
         /* Estado Vazio (Nenhum produto encontrado) */
         <div className="text-center py-20 px-4 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md rounded-[2.5rem] border border-slate-200/50 dark:border-slate-700/50 max-w-2xl mx-auto shadow-sm">

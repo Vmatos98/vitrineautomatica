@@ -135,7 +135,13 @@ export default async function ProdutoInterno({ params }: ProductPageProps) {
                 >
                   <div className="absolute inset-0 bg-white/20 rounded-2xl translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300 ease-out" />
                   <ShoppingBag size={24} className="relative z-10" />
-                  <span className="relative z-10 tracking-wide">Comprar Agora na Loja</span>
+                  <span className="relative z-10 tracking-wide">
+                    {product.shop?.toLowerCase() === 'shopee'
+                      ? 'Confira na shopee'
+                      : product.shop?.toLowerCase().includes('mercado')
+                      ? 'Ver no Mercado Livre'
+                      : 'Comprar Agora na Loja'}
+                  </span>
                   <ExternalLink size={20} className="relative z-10 opacity-70 ml-1" />
                 </a>
 
